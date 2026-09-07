@@ -30,7 +30,12 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
-        run: npx expo prebuild --platform android --non-interactive
+        env:
+          CI: 1
+        run: npx expo prebuild --platform android --no-install
+
+      - name: Install newly added native dependencies
+        run: pnpm install --no-frozen-lockfile
 
       - name: Setup Java
         uses: actions/setup-java@v4
