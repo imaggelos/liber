@@ -29,8 +29,15 @@ jobs:
       - name: Install JavaScript dependencies
         run: pnpm install --no-frozen-lockfile
 
+      - name: Fix Expo dependency versions
+        run: npx expo install --fix
+        env:
+          CI: '1'
+
       - name: Generate Android project
         run: npx expo prebuild --platform android --non-interactive
+        env:
+          CI: '1'
 
       - name: Setup Java
         uses: actions/setup-java@v4
