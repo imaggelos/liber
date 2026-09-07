@@ -2,7 +2,8 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import Pdf from 'react-native-pdf';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '@/contexts/LibraryContext';
@@ -21,16 +22,15 @@ export default function ReaderScreen() {
   const colors = useColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { books, updateProgress } = useLibrary();
   const [fontSize, setFontSize] = useState(18);
+  const [readerError, setReaderError] = useState(false);
   const book = books.find((item) => item.id === id) ?? books[0];
   const readingLabel = useMemo(() => `${Math.round((book?.progress ?? 0) * 100)}% complete`, [book?.progress]);
 
   if (!book) return null;
   const isNativeReadable = !!book.uri && (book.format === 'EPUB' || book.format === 'PDF');
-  const source = book.format === 'EPUB' && book.uri ? { html: epubDocument(book.uri, fontSize), baseUrl: book.uri } : book.uri ? { uri: book.uri } : null;
 
   const markProgress = async () => {
     await Haptics.selectionAsync();
@@ -44,8 +44,12 @@ export default function ReaderScreen() {
         <View style={styles.toolbarTitle}><Text numberOfLines={1} style={[styles.toolbarBook, { color: colors.foreground }]}>{book.title}</Text><Text style={[styles.toolbarMeta, { color: colors.mutedForeground }]}>{book.format} · {readingLabel}</Text></View>
         <Pressable onPress={markProgress} style={styles.iconButton} accessibilityLabel="Mark reading progress"><Feather name="bookmark" size={20} color={colors.foreground} /></Pressable>
       </View>
-      {isNativeReadable && source ? (
-        <WebView source={source} originWhitelist={['*']} allowFileAccess allowUniversalAccessFromFileURLs javaScriptEnabled style={styles.webview} startInLoadingState renderLoading={() => <ActivityIndicator style={styles.loader} color={colors.foreground} />} onError={() => updateProgress(book.id, book.progress)} />
+      {readerError ? (
+        <View style={styles.unsupported}><Feather name="alert-circle" size={28} color={colors.mutedForeground} /><Text style={[styles.unsupportedTitle, { color: colors.foreground }]}>This book could not be opened</Text><Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>The file may be incomplete or unsupported. Try importing it again.</Text></View>
+      ) : book.format === 'PDF' && book.uri ? (
+        <Pdf source={{ uri: book.uri }} style={styles.pdf} trustAllCerts={false} onLoadComplete={() => setReaderError(false)} onError={() => setReaderError(true)} />
+      ) : book.format === 'EPUB' && book.uri ? (
+        <WebView source={{ html: epubDocument(book.uri, fontSize), baseUrl: book.uri }} originWhitelist={['*']} allowFileAccess allowUniversalAccessFromFileURLs javaScriptEnabled domStorageEnabled style={styles.webview} startInLoadingState renderLoading={() => <ActivityIndicator style={styles.loader} color={colors.foreground} />} onError={() => setReaderError(true)} />
       ) : (
         <View style={styles.unsupported}><Feather name="file-text" size={28} color={colors.mutedForeground} /><Text style={[styles.unsupportedTitle, { color: colors.foreground }]}>This format needs another reader</Text><Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>Liber currently reads EPUB and PDF files inside the app.</Text></View>
       )}
@@ -55,4 +59,4 @@ export default function ReaderScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 }, toolbar: { minHeight: 70, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, toolbarTitle: { flex: 1, alignItems: 'center' }, toolbarBook: { fontFamily: 'Inter_600SemiBold', fontSize: 14, maxWidth: 420 }, toolbarMeta: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 3 }, webview: { flex: 1, backgroundColor: '#111' }, loader: { flex: 1 }, unsupported: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }, unsupportedTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, marginTop: 16 }, unsupportedCopy: { fontFamily: 'Inter_400Regular', textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 8 }, controls: { minHeight: 62, borderTopWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 9 }, controlLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 9, letterSpacing: 1, marginRight: 6 }, sizeButton: { width: 30, height: 30, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, largeA: { fontSize: 17 }, sizeValue: { minWidth: 18, textAlign: 'center', fontSize: 12 }, progressButton: { marginLeft: 'auto', minHeight: 36, paddingHorizontal: 13, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, });
+  screen: { flex: 1 }, pdf: { flex: 1, width: '100%', backgroundColor: '#111' }, toolbar: { minHeight: 70, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, toolbarTitle: { flex: 1, alignItems: 'center' }, toolbarBook: { fontFamily: 'Inter_600SemiBold', fontSize: 14, maxWidth: 420 }, toolbarMeta: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 3 }, webview: { flex: 1, backgroundColor: '#111' }, loader: { flex: 1 }, unsupported: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }, unsupportedTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, marginTop: 16 }, unsupportedCopy: { fontFamily: 'Inter_400Regular', textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 8 }, controls: { minHeight: 62, borderTopWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 9 }, controlLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 9, letterSpacing: 1, marginRight: 6 }, sizeButton: { width: 30, height: 30, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, largeA: { fontSize: 17 }, sizeValue: { minWidth: 18, textAlign: 'center', fontSize: 12 }, progressButton: { marginLeft: 'auto', minHeight: 36, paddingHorizontal: 13, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, });

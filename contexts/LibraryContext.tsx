@@ -27,27 +27,6 @@ type LibraryContextValue = {
 
 const STORAGE_KEY = '@liber/library/v1';
 
-const sampleBooks: Book[] = [
-  {
-    id: 'sample-woolf',
-    title: 'A Room of One’s Own',
-    author: 'Virginia Woolf',
-    format: 'EPUB',
-    progress: 0.42,
-    addedAt: 2,
-    isSample: true,
-  },
-  {
-    id: 'sample-kafka',
-    title: 'The Metamorphosis',
-    author: 'Franz Kafka',
-    format: 'PDF',
-    progress: 0,
-    addedAt: 1,
-    isSample: true,
-  },
-];
-
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
 function formatFromName(name: string): BookFormat {
@@ -77,7 +56,8 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
         if (stored) {
-          setBooks(JSON.parse(stored) as Book[]);
+          const restoredBooks = JSON.parse(stored) as Book[];
+          setBooks(restoredBooks.filter((book) => !book.isSample && book.id !== 'sample-woolf' && book.id !== 'sample-kafka'));
         }
       })
       .catch(() => {
