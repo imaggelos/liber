@@ -2,21 +2,13 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Reader as EpubReader } from '@epubjs-react-native/core';
+import { useFileSystem } from '@epubjs-react-native/expo-file-system';
 import Pdf from 'react-native-pdf';
-import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLibrary } from '@/contexts/LibraryContext';
 import { useColors } from '@/hooks/useColors';
-
-function escapeHtml(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function epubDocument(uri: string, fontSize: number) {
-  const safeUri = escapeHtml(uri);
-  return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;background:#111;color:#f4f4f4;font-family:Georgia,serif}#reader{max-width:760px;margin:0 auto;padding:32px 24px;font-size:${fontSize}px;line-height:1.65}button{background:#2b2b2b;color:#fff;border:0;padding:10px 14px;border-radius:6px}</style></head><body><main id="reader"><p>Loading book…</p></main><script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js"></script><script>const book=ePub("${safeUri}");const rendition=book.renderTo("reader",{width:"100%",height:"auto",flow:"scrolled-doc"});rendition.display();book.ready.then(()=>{document.querySelector('#reader').innerHTML='';rendition.display()}).catch(()=>{document.querySelector('#reader').innerHTML='<p>Could not read this EPUB file.</p>'});</script></body></html>`;
-}
 
 export default function ReaderScreen() {
   const colors = useColors();
@@ -47,9 +39,19 @@ export default function ReaderScreen() {
       {readerError ? (
         <View style={styles.unsupported}><Feather name="alert-circle" size={28} color={colors.mutedForeground} /><Text style={[styles.unsupportedTitle, { color: colors.foreground }]}>This book could not be opened</Text><Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>The file may be incomplete or unsupported. Try importing it again.</Text></View>
       ) : book.format === 'PDF' && book.uri ? (
-        <Pdf source={{ uri: book.uri }} style={styles.pdf} trustAllCerts={false} onLoadComplete={() => setReaderError(false)} onError={() => setReaderError(true)} />
+        <Pdf source={{ uri: book.uri }} style={styles.pdf} trustAllCerts={false} enablePaging onLoadComplete={() => setReaderError(false)} onPageChanged={(page, total) => updateProgress(book.id, total > 1 ? (page - 1) / (total - 1) : 1)} onError={() => setReaderError(true)} />
       ) : book.format === 'EPUB' && book.uri ? (
-        <WebView source={{ html: epubDocument(book.uri, fontSize), baseUrl: book.uri }} originWhitelist={['*']} allowFileAccess allowUniversalAccessFromFileURLs javaScriptEnabled domStorageEnabled style={styles.webview} startInLoadingState renderLoading={() => <ActivityIndicator style={styles.loader} color={colors.foreground} />} onError={() => setReaderError(true)} />
+        <EpubReader
+          src={book.uri}
+          width="100%"
+          height="100%"
+          flow="scrolled"
+          manager="continuous"
+          fileSystem={useFileSystem}
+          onLocationChange={(_, __, progress) => updateProgress(book.id, progress)}
+          onDisplayError={() => setReaderError(true)}
+          defaultTheme={{ body: { color: colors.foreground, background: colors.background, fontSize: `${fontSize}px`, lineHeight: '1.6' } }}
+        />
       ) : (
         <View style={styles.unsupported}><Feather name="file-text" size={28} color={colors.mutedForeground} /><Text style={[styles.unsupportedTitle, { color: colors.foreground }]}>This format needs another reader</Text><Text style={[styles.unsupportedCopy, { color: colors.mutedForeground }]}>Liber currently reads EPUB and PDF files inside the app.</Text></View>
       )}
@@ -59,4 +61,4 @@ export default function ReaderScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 }, pdf: { flex: 1, width: '100%', backgroundColor: '#111' }, toolbar: { minHeight: 70, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, toolbarTitle: { flex: 1, alignItems: 'center' }, toolbarBook: { fontFamily: 'Inter_600SemiBold', fontSize: 14, maxWidth: 420 }, toolbarMeta: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 3 }, webview: { flex: 1, backgroundColor: '#111' }, loader: { flex: 1 }, unsupported: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }, unsupportedTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, marginTop: 16 }, unsupportedCopy: { fontFamily: 'Inter_400Regular', textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 8 }, controls: { minHeight: 62, borderTopWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 9 }, controlLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 9, letterSpacing: 1, marginRight: 6 }, sizeButton: { width: 30, height: 30, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, largeA: { fontSize: 17 }, sizeValue: { minWidth: 18, textAlign: 'center', fontSize: 12 }, progressButton: { marginLeft: 'auto', minHeight: 36, paddingHorizontal: 13, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, });
+  screen: { flex: 1 }, pdf: { flex: 1, width: '100%', backgroundColor: '#111' }, toolbar: { minHeight: 70, borderBottomWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, iconButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, toolbarTitle: { flex: 1, alignItems: 'center' }, toolbarBook: { fontFamily: 'Inter_600SemiBold', fontSize: 14, maxWidth: 420 }, toolbarMeta: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 3 }, unsupported: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }, unsupportedTitle: { fontFamily: 'Inter_600SemiBold', fontSize: 17, marginTop: 16 }, unsupportedCopy: { fontFamily: 'Inter_400Regular', textAlign: 'center', fontSize: 13, lineHeight: 20, marginTop: 8 }, controls: { minHeight: 62, borderTopWidth: 1, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 9 }, controlLabel: { fontFamily: 'Inter_600SemiBold', fontSize: 9, letterSpacing: 1, marginRight: 6 }, sizeButton: { width: 30, height: 30, borderWidth: 1, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }, largeA: { fontSize: 17 }, sizeValue: { minWidth: 18, textAlign: 'center', fontSize: 12 }, progressButton: { marginLeft: 'auto', minHeight: 36, paddingHorizontal: 13, borderRadius: 18, alignItems: 'center', justifyContent: 'center' }, });

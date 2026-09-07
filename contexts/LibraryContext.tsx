@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 
@@ -49,7 +50,7 @@ function titleFromName(name: string) {
 }
 
 export function LibraryProvider({ children }: { children: React.ReactNode }) {
-  const [books, setBooks] = useState<Book[]>(sampleBooks);
+  const [books, setBooks] = useState<Book[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -88,15 +89,22 @@ export function LibraryProvider({ children }: { children: React.ReactNode }) {
 
     if (result.canceled || !result.assets?.length) return;
 
-    const imported: Book[] = result.assets.map((asset, index) => ({
-      id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
-      title: titleFromName(asset.name),
-      author: 'Imported book',
-      format: formatFromName(asset.name),
-      fileName: asset.name,
-      uri: asset.uri,
-      progress: 0,
-      addedAt: Date.now() - index,
+    const imported = await Promise.all(result.assets.map(async (asset, index) => {
+      const id = `${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+      const fileName = `${id}-${asset.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+      const destination = `${FileSystem.documentDirectory}books/${fileName}`;
+      await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}books`, { intermediates: true });
+      await FileSystem.copyAsync({ from: asset.uri, to: destination });
+      return {
+        id,
+        title: titleFromName(asset.name),
+        author: 'Imported book',
+        format: formatFromName(asset.name),
+        fileName: asset.name,
+        uri: destination,
+        progress: 0,
+        addedAt: Date.now() - index,
+      } satisfies Book;
     }));
 
     setBooks((current) => [...imported, ...current]);
